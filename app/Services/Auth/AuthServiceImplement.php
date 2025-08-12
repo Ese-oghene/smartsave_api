@@ -34,33 +34,56 @@ class AuthServiceImplement extends ServiceApi implements AuthService{
 
     // Define your custom methods :)
 
-
-     public function register($request):AuthServiceImplement
-     {
-        try {
+    public function register($request): AuthServiceImplement
+	{
+		try {
 
 			$validated = $request->validated();
-
 			$user = $this->userRepository->createUser($validated);
 
 			// Generate Sanctum token
-			$token = $user->createToken('auth_token')->plainTextToken;
-
+			$token = $user->createToken('API Token')->plainTextToken;
 			return $this->setCode(200)
 				->setMessage("Registration Successfull")
 				->setData([
 					'user' => new UserResource($user),
 					'token' => $token,
+					'permissions' => $user->getAllPermissionNames(),
 				]);
-
-
-
 		} catch (\Exception $e) {
 			return $this->setCode(400)
 				->setMessage("Registration Failed")
 				->setError($e->getMessage());
 		}
-     }
+	}
+
+
+    //  public function register($request):AuthServiceImplement
+    //  {
+    //     try {
+
+	// 		$validated = $request->validated();
+
+	// 		$user = $this->userRepository->createUser($validated);
+
+	// 		// Generate Sanctum token
+	// 		$token = $user->createToken('auth_token')->plainTextToken;
+
+	// 		return $this->setCode(200)
+	// 			->setMessage("Registration Successfull")
+	// 			->setData([
+	// 				'user' => new UserResource($user),
+	// 				'token' => $token,
+	// 			]);
+
+
+
+	// 	} catch (\Exception $e) {
+	// 		return $this->setCode(400)
+	// 			->setMessage("Registration Failed")
+	// 			->setError($e->getMessage());
+	// 	}
+    //  }
 
 
      public function login($request): AuthServiceImplement

@@ -25,6 +25,39 @@ class User extends Authenticatable
         'role',
     ];
 
+     protected $attributes = [
+    'role' => 'user',
+    ];
+
+    protected static function booted()
+    {
+        static::created(function ($user) {
+            $accountTypes = ['savings', 'shares'];
+
+            foreach ($accountTypes as $type) {
+                $user->accounts()->create([
+                    'account_type'   => $type,
+                    'account_number' => mt_rand(1000000000, 9999999999),
+                    'balance'        => 0,
+                    'status'         => 'active',
+                ]);
+            }
+        });
+    }
+
+    protected $appends = ['total_balance'];
+
+    public function getTotalBalanceAttribute()
+    {
+        return $this->accounts ? $this->accounts->sum('balance') : 0;
+    }
+
+
+        public function accounts()
+    {
+        return $this->hasMany(Account::class);
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -42,5 +75,7 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'password' => 'hashed'
+
     ];
 }

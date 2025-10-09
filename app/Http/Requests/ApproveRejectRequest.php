@@ -1,19 +1,21 @@
 <?php
 
-namespace App\Http\Requests\Auth;
+namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
-class registerRequest extends FormRequest
+class ApproveRejectRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return true;
+        // return true;
+         // Only allow admins
+        return auth()->check() && auth()->user()->role === 'admin';
     }
 
     /**
@@ -21,26 +23,12 @@ class registerRequest extends FormRequest
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
-    public function rules(): array
-    {
-       return [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6|confirmed',
-            'phone_no' => 'required|string|max:20',
-            'role' => 'sometimes|string|in:user,admin',
-        ];
-    }
-
-    public function messages(): array
+     public function rules(): array
     {
         return [
-            'email.unique' => 'This email is already registered.',
-            'password.confirmed' => 'Password confirmation does not match.',
+            'transaction_id' => 'required|exists:transactions,id',
         ];
     }
-
-
 
     protected function failedValidation(Validator $validator)
     {

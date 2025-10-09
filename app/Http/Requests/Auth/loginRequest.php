@@ -26,4 +26,8 @@ class loginRequest extends FormRequest
             'password' => "required|string"
         ];
     }
+
+
+
+    
 }

@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Http\Requests\Auth;
+namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
-class registerRequest extends FormRequest
+class ContributeRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -21,26 +21,25 @@ class registerRequest extends FormRequest
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
-    public function rules(): array
+  public function rules(): array
     {
-       return [
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6|confirmed',
-            'phone_no' => 'required|string|max:20',
-            'role' => 'sometimes|string|in:user,admin',
+        return [
+            'amount' => 'required|numeric|min:1',
+            'description' => 'nullable|string|max:255',
+            // optional: allow status (default = pending)
+            'status'      => 'in:pending,approved,rejected',
         ];
     }
 
     public function messages(): array
     {
         return [
-            'email.unique' => 'This email is already registered.',
-            'password.confirmed' => 'Password confirmation does not match.',
+            'amount.required' => 'Contribution amount is required.',
+            'amount.numeric'  => 'Amount must be a valid number.',
+            'amount.min'      => 'Amount must be at least 1.',
+            'status.in'       => 'Invalid status value.',
         ];
     }
-
-
 
     protected function failedValidation(Validator $validator)
     {

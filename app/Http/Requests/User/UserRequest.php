@@ -11,7 +11,7 @@ class UserRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -21,8 +21,27 @@ class UserRequest extends FormRequest
      */
     public function rules(): array
     {
+
+           return [
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|string|min:6|confirmed',
+            'phone_no' => 'required|string|max:20',
+            'role' => 'sometimes|string|in:user,admin', // Adjust as needed
+
+            
+        ];
+
+    }
+
+    /**
+     * Custom messages for validation errors.
+     */
+    public function messages(): array
+    {
         return [
-            //
+            'email.unique' => 'This email is already registered.',
+            'password.confirmed' => 'Password confirmation does not match.',
         ];
     }
 }

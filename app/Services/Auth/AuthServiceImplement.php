@@ -1,11 +1,13 @@
 <?php
 
 namespace App\Services\Auth;
+use Illuminate\Validation\ValidationException;
 
 use LaravelEasyRepository\ServiceApi;
 use App\Http\Resources\UserResource;
 use Illuminate\Support\Facades\Hash;
 use App\Repositories\User\UserRepository;
+use Illuminate\Support\Facades\Mail;
 
 class AuthServiceImplement extends ServiceApi implements AuthService{
 
@@ -35,58 +37,40 @@ class AuthServiceImplement extends ServiceApi implements AuthService{
     // Define your custom methods :)
 
     public function register($request): AuthServiceImplement
-	{
-		try {
+{
+        try {
+        $validated = $request->validated();
+        $user = $this->userRepository->createUser($validated);
 
-			$validated = $request->validated();
-			$user = $this->userRepository->createUser($validated);
+        $token = $user->createToken('API Token')->plainTextToken;
 
-			// Generate Sanctum token
-			$token = $user->createToken('API Token')->plainTextToken;
-			return $this->setCode(200)
-				->setMessage("Registration Successfull")
-				->setData([
-					'user' => new UserResource($user),
-					'token' => $token,
-					'permissions' => $user->getAllPermissionNames(),
-				]);
-		} catch (\Exception $e) {
-			return $this->setCode(400)
+        $user->load('accounts'); // make sure accounts are loaded
+        return $this->setCode(201)
+           ->setMessage("Registration successful")
+            ->setData([
+                'user' => new UserResource($user),
+                'token' => $token,
+                'permissions' => method_exists($user, 'getAllPermissionNames')
+                    ? $user->getAllPermissionNames()
+                    : [],
+            ]);
+            }
+             catch (ValidationException $e) {
+            throw $e; // Laravel returns default format
+
+            }
+
+            catch (\Exception $e) {
+
+	 		return $this->setCode(400)
 				->setMessage("Registration Failed")
 				->setError($e->getMessage());
 		}
-	}
+
+}
 
 
-    //  public function register($request):AuthServiceImplement
-    //  {
-    //     try {
-
-	// 		$validated = $request->validated();
-
-	// 		$user = $this->userRepository->createUser($validated);
-
-	// 		// Generate Sanctum token
-	// 		$token = $user->createToken('auth_token')->plainTextToken;
-
-	// 		return $this->setCode(200)
-	// 			->setMessage("Registration Successfull")
-	// 			->setData([
-	// 				'user' => new UserResource($user),
-	// 				'token' => $token,
-	// 			]);
-
-
-
-	// 	} catch (\Exception $e) {
-	// 		return $this->setCode(400)
-	// 			->setMessage("Registration Failed")
-	// 			->setError($e->getMessage());
-	// 	}
-    //  }
-
-
-     public function login($request): AuthServiceImplement
+public function login($request): AuthServiceImplement
 	{
 		try {
 			$validated = $request->validated();
@@ -103,7 +87,7 @@ class AuthServiceImplement extends ServiceApi implements AuthService{
 			// Generate Sanctum token
 			$token = $user->createToken('auth_token')->plainTextToken;
 
-
+            $user->load('accounts'); // make sure wallet/account is loaded
 			return $this->setCode(200)
 				->setMessage("Login Success")
 				->setData([
@@ -111,7 +95,11 @@ class AuthServiceImplement extends ServiceApi implements AuthService{
                     'role' => $user->role, // Assign role properly
 					'token' => $token
 				]);
-		} catch (\Exception $e) {
+		}
+        catch (ValidationException $e) {
+        throw $e; // Laravel returns default format
+
+        }catch (\Exception $e) {
 			return $this->setCode(400)
 				->setMessage("Login Failed")
 				->setError($e->getMessage());
@@ -121,6 +109,7 @@ class AuthServiceImplement extends ServiceApi implements AuthService{
        public function logout($request): AuthServiceImplement
 	{
 		try {
+
 			$request->user()->currentAccessToken()->delete();
 			return $this->setCode(200)
 				->setMessage("Logout Successfull");

@@ -65,6 +65,7 @@ class TransactionServiceImplement extends ServiceApi implements TransactionServi
                 'amount'      => $savingsPart,
                 'description' => 'Contribution to Savings',
                 'status'      => 'pending',
+                'receipt_path' => $data['receipt_path'] ?? null, // ✅ added
             ]);
 
             $transactions[] = $this->transactionRepository->createContribution([
@@ -73,6 +74,7 @@ class TransactionServiceImplement extends ServiceApi implements TransactionServi
                 'amount'      => $sharesPart,
                 'description' => 'Contribution to Shares',
                 'status'      => 'pending',
+                'receipt_path' => $data['receipt_path'] ?? null, // ✅ added
             ]);
 
             return $this->setCode(201)
@@ -87,88 +89,72 @@ class TransactionServiceImplement extends ServiceApi implements TransactionServi
     }
 
     public function approveUserTransactions($userId): TransactionServiceImplement
-{
-    try {
-        $user = User::with('accounts')->findOrFail($userId);
-
-        $pendingTransactions = $this->transactionRepository->query()
-            ->whereHas('account', function($q) use ($userId) {
-                $q->where('user_id', $userId);
-            })
-            ->where('status', 'pending')
-            ->get();
-
-        if ($pendingTransactions->isEmpty()) {
-            return $this->setCode(400)
-                ->setMessage("No pending contributions for this user");
-        }
-
-        $transactionsData = [];
-        foreach ($pendingTransactions as $transaction) {
-            $transaction->update(['status' => 'approved']);
-
-            $account = $transaction->account;
-            $account->balance += $transaction->amount;
-            $account->save();
-
-            $transactionsData[] = new TransactionResource($transaction);
-        }
-
-        return $this->setCode(200)
-            ->setMessage("All pending contributions approved for user")
-            ->setData([
-                'transactions' => $transactionsData,
-                'accounts'     => $user->accounts->map(fn($acc) => [
-                    'type'           => $acc->account_type,
-                    'account_number' => $acc->account_number,
-                    'balance'        => $acc->balance,
-                ]),
-                'total_balance' => $user->accounts->sum('balance'),
-            ]);
-
-    } catch (\Exception $e) {
-        return $this->setCode(400)
-            ->setMessage("Approval Failed")
-            ->setError($e->getMessage());
-    }
-}
-
-
-    public function reject($id): TransactionServiceImplement
     {
         try {
-            $transaction = $this->transactionRepository->findById($id);
+            $user = User::with('accounts')->findOrFail($userId);
 
-            if ($transaction->status !== 'pending') {
-                return $this->setCode(400)->setMessage("Transaction already processed");
+            $pendingTransactions = $this->transactionRepository->query()
+                ->whereHas('account', function($q) use ($userId) {
+                    $q->where('user_id', $userId);
+                })
+                ->where('status', 'pending')
+                ->get();
+
+            if ($pendingTransactions->isEmpty()) {
+                return $this->setCode(400)
+                    ->setMessage("No pending contributions for this user");
             }
 
-            $transaction->update(['status' => 'rejected']);
-            $account = $transaction->account;
+            $transactionsData = [];
+
+            foreach ($pendingTransactions as $transaction) {
+                $transaction->update(['status' => 'approved']);
+
+                $account = $transaction->account;
+                $account->balance += $transaction->amount;
+                $account->save();
+
+                $transactionsData[] = new TransactionResource($transaction);
+            }
 
             return $this->setCode(200)
-                ->setMessage("Contribution rejected")
+                ->setMessage("All pending contributions approved for user")
                 ->setData([
-                    'transaction' => new TransactionResource($transaction),
-                    'account'     => [
-                        'account_number' => $account->account_number,
-                        'balance'        => $account->balance,
-                        'status'         => $account->status,
-                    ],
+                    'transactions' => $transactionsData,
+                    'accounts'     => $user->accounts->map(fn($acc) => [
+                        'type'           => $acc->account_type,
+                        'account_number' => $acc->account_number,
+                        'balance'        => $acc->balance,
+                    ]),
+                    'total_balance' => $user->accounts->sum('balance'),
                 ]);
+
         } catch (\Exception $e) {
-            return $this->setCode(400)->setMessage("Rejection Failed")->setError($e->getMessage());
+            return $this->setCode(400)
+                ->setMessage("Approval Failed")
+                ->setError($e->getMessage());
         }
     }
 
-    public function userTransactions($user): TransactionServiceImplement
+
+    public function userTransactions($user, $perPage = 5): TransactionServiceImplement
     {
         try {
-            $transactions = $this->transactionRepository->userTransactions($user->accounts->pluck('id')->toArray());
+            $transactions = $this->transactionRepository->userTransactions($user->accounts->pluck('id')->toArray())
+            ->paginate($perPage); // ✅ now uses dynamic per-page value
 
             return $this->setCode(200)
                 ->setMessage("User transactions retrieved successfully")
-                ->setData(TransactionResource::collection($transactions));
+                ->setData([
+                'data' => TransactionResource::collection($transactions)->items(),
+                'meta' => [
+                    'current_page' => $transactions->currentPage(),
+                    'last_page' => $transactions->lastPage(),
+                    'per_page' => $transactions->perPage(),
+                    'total' => $transactions->total(),
+                ],
+            ]);
+                //  ->setData(TransactionResource::collection($transactions));
         } catch (\Exception $e) {
             return $this->setCode(400)->setMessage("Fetch Failed")->setError($e->getMessage());
         }
@@ -233,6 +219,106 @@ class TransactionServiceImplement extends ServiceApi implements TransactionServi
             ->setError($e->getMessage());
     }
 }
+
+
+public function userSummary($user): TransactionServiceImplement
+{
+    try {
+        $transactions = $this->transactionRepository
+            ->userTransactions($user->accounts->pluck('id')->toArray())
+            ->get(); // ✅ Get all, no pagination
+
+        $totalContributions = $transactions
+            ->where('type', 'contribution')
+            ->where('status', 'approved')
+            ->sum('amount');
+
+        $pendingContributions = $transactions
+            ->where('type', 'contribution')
+            ->where('status', 'pending')
+            ->sum('amount');
+
+        $totalWithdrawals = $transactions
+            ->where('type', 'withdrawal')
+            ->where('status', 'approved')
+            ->sum('amount');
+
+        $pendingWithdrawals = $transactions
+            ->where('type', 'withdrawal')
+            ->where('status', 'pending')
+            ->sum('amount');
+
+        $totalBalance = $totalContributions - $totalWithdrawals;
+
+        return $this->setCode(200)
+            ->setMessage("User summary retrieved successfully")
+            ->setData([
+                'total_balance' => $totalBalance,
+                'total_contributions' => $totalContributions,
+                'pending_contributions' => $pendingContributions,
+                'total_withdrawals' => $totalWithdrawals,
+                'pending_withdrawals' => $pendingWithdrawals,
+            ]);
+    } catch (\Exception $e) {
+        return $this->setCode(400)
+            ->setMessage("Failed to fetch summary")
+            ->setError($e->getMessage());
+    }
+}
+
+
+// New method to get users with pending contributions
+    public function usersWithPendingStatus(int $perPage = 2): TransactionServiceImplement
+{
+    try {
+        $users = $this->transactionRepository->getUsersWithPendingContributions($perPage);
+
+        return $this->setCode(200)
+            ->setMessage('Users with pending contributions retrieved successfully')
+            ->setData($users);
+    } catch (\Exception $e) {
+        return $this->setCode(400)
+            ->setMessage('Failed to fetch users with pending transactions')
+            ->setError($e->getMessage());
+    }
+}
+
+
+public function getAllContributors(int $perPage = 10): TransactionServiceImplement
+{
+    try {
+        // Call repository
+        $contributors = $this->transactionRepository->getAllContributors($perPage);
+
+        return $this->setCode(200)
+            ->setMessage('Contributors retrieved successfully')
+            ->setData($contributors);
+
+    } catch (\Exception $e) {
+        return $this->setCode(400)
+            ->setMessage('Failed to fetch contributors')
+            ->setError($e->getMessage());
+    }
+}
+
+
+    public function userPendingTransactions($userId)
+{
+    try {
+        $pendingTransactions = $this->transactionRepository->getUserPendingTransactions($userId);
+
+        return $this->setCode(200)
+            ->setMessage("Pending contributions retrieved successfully")
+            ->setData(TransactionResource::collection($pendingTransactions)); // ✅ use resource here
+            // ->setData($pendingTransactions);
+    } catch (\Exception $e) {
+        return $this->setCode(400)
+            ->setMessage("Failed to fetch user's pending transactions")
+            ->setError($e->getMessage());
+    }
+}
+
+
 
 
 }

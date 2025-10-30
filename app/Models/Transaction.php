@@ -20,6 +20,7 @@ class Transaction extends Model
         'amount',
         'description',
         'status',
+         'receipt_path', // ✅ Include this here!
     ];
 
     /**

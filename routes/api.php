@@ -35,6 +35,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // ----------------- TRANSACTIONS -----------------
     Route::get('/transactions', [TransactionController::class, 'index']); // user’s contributions
     Route::post('/transactions', [TransactionController::class, 'store']); // contribute
+    Route::get('/transactions/summary', [TransactionController::class, 'summary']);
+
 
     // Admin routes
     Route::get('/admin/transactions', [TransactionController::class, 'all']);
@@ -42,6 +44,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/transactions/approve-user/{id}', [TransactionController::class, 'approveUser']);
     Route::post('/admin/transactions/reject', [TransactionController::class, 'reject']);
     Route::delete('/admin/transactions/{id}', [TransactionController::class, 'destroy']);
+
+    Route::get('/admin/users-with-status', [TransactionController::class, 'usersWithPendingStatus']);
+    Route::get('/admin/users/{id}/pending-transactions', [TransactionController::class, 'userPendingTransactions']);
+    Route::get('/admin/summary', [TransactionController::class, 'getAdminSummary']);
+       Route::get('/admin/contributors', [TransactionController::class, 'getAllContributors']);
+
 
     // Admin: view specific user + their accounts + transactions
     Route::get('/admin/users/{id}/transactions', [TransactionController::class, 'userDetails']);

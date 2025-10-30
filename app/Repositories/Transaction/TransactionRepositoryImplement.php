@@ -4,6 +4,8 @@ namespace App\Repositories\Transaction;
 
 use LaravelEasyRepository\Implementations\Eloquent;
 use App\Models\Transaction;
+use App\Models\User;
+
 
 class TransactionRepositoryImplement extends Eloquent implements TransactionRepository{
 
@@ -34,12 +36,10 @@ class TransactionRepositoryImplement extends Eloquent implements TransactionRepo
         return $this->model->with('account.user')->latest()->get();
     }
 
-    public function userTransactions($accountId)
+    public function userTransactions(array $accountId)
     {
         return $this->model->whereIn('account_id', $accountId)
-        ->with('account') // 👈 include the related account
-        ->latest()
-        ->get();
+        ->latest();
     }
 
 
@@ -47,6 +47,107 @@ class TransactionRepositoryImplement extends Eloquent implements TransactionRepo
     {
         return $this->model->newQuery();
     }
+
+// Returns all users with: Name Total balance Count of pending contributions
+    public function getUsersWithPendingContributions($perPage = 5)
+{
+    $paginator = User::with('accounts.transactions')->paginate($perPage);
+
+    // Extract items (a collection)
+    $users = collect($paginator->items());
+
+    // Transform each item
+    $data = $users->map(function ($user) {
+        $pendingCount = $user->accounts
+            ->flatMap->transactions
+            ->where('status', 'pending')
+            ->where('type', 'contribution')
+            ->count();
+
+        $totalBalance = $user->accounts->sum('balance');
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'pending_count' => $pendingCount,
+            'total_balance' => $totalBalance,
+            ];
+        });
+
+        return [
+            'data' => $data,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ];
+    }
+
+
+
+public function getAllContributors($perPage = 5)
+{
+    $paginator = User::with('accounts.transactions')->paginate($perPage);
+
+    // Extract items (a collection)
+    $users = collect($paginator->items());
+
+    // Transform each item
+    $data = $users->map(function ($user) {
+        $totalContributions = $user->accounts
+            ->flatMap->transactions
+            ->where('type', 'contribution')
+            ->where('status', 'approved')
+            ->sum('amount');
+
+        $contributionCount = $user->accounts
+            ->flatMap->transactions
+            ->where('type', 'contribution')
+            ->where('status', 'approved')
+            ->count();
+
+        $totalBalance = $user->accounts->sum('balance');
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'total_contributions' => $totalContributions,
+            'total_contributions_count' => $contributionCount,
+            'total_balance' => $totalBalance,
+        ];
+    });
+
+    // Return paginated response
+    return [
+        'data' => $data,
+        'meta' => [
+            'current_page' => $paginator->currentPage(),
+            'last_page'    => $paginator->lastPage(),
+            'per_page'     => $paginator->perPage(),
+            'total'        => $paginator->total(),
+        ],
+    ];
+}
+
+
+
+    public function getUserPendingTransactions($userId)
+{
+    $user = User::with('accounts.transactions')->findOrFail($userId);
+
+    $pendingTransactions = $user->accounts
+        ->flatMap->transactions
+        ->where('status', 'pending')
+        ->where('type', 'contribution')
+        ->values();
+
+    return $pendingTransactions;
+}
+
 
 
 }

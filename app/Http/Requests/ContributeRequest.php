@@ -26,7 +26,7 @@ class ContributeRequest extends FormRequest
         return [
             'amount' => 'required|numeric|min:1',
             'description' => 'nullable|string|max:255',
-            // optional: allow status (default = pending)
+            'receipt' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048', // ✅ new rule
             'status'      => 'in:pending,approved,rejected',
         ];
     }
@@ -38,6 +38,9 @@ class ContributeRequest extends FormRequest
             'amount.numeric'  => 'Amount must be a valid number.',
             'amount.min'      => 'Amount must be at least 1.',
             'status.in'       => 'Invalid status value.',
+            'receipt.file'    => 'The receipt must be a valid file.',
+            'receipt.mimes'   => 'The receipt must be an image or PDF file.',
+            'receipt.max'     => 'The receipt may not be greater than 2MB.',
         ];
     }
 
